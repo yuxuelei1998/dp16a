@@ -53,7 +53,6 @@ __global__ void wmmaKernel(const __half* A, const __half* B, const float* C, flo
 
     int offset = testIdx * 16 * 16;
     
-    // 16x16x16 WMMA片段
     wmma::fragment<wmma::matrix_a, 16, 16, 16, __half, wmma::row_major> a_frag;
     wmma::fragment<wmma::matrix_b, 16, 16, 16, __half, wmma::row_major> b_frag;
     wmma::fragment<wmma::accumulator, 16, 16, 16, float> c_frag;
@@ -73,7 +72,6 @@ __global__ void wmmaKernel(const __half* A, const __half* B, const float* C, flo
     wmma::store_matrix_sync(D + offset, d_frag, 16, wmma::mem_row_major);
 }
 
-// 16x16x16 WMMA
 void executeWMMA(const TestCase* testCases, Result* results, int numTests) {
     const int matrixSize = 16 * 16;
     __half *d_A, *d_B;
@@ -107,13 +105,11 @@ void executeWMMA(const TestCase* testCases, Result* results, int numTests) {
     cudaMemcpy(d_B, h_B.data(), h_B.size() * sizeof(__half), cudaMemcpyHostToDevice);
     cudaMemcpy(d_C, h_C.data(), h_C.size() * sizeof(float), cudaMemcpyHostToDevice);
 
-    // WMMA
     wmmaKernel<<<numTests, 32>>>(d_A, d_B, d_C, d_D, numTests);
     cudaDeviceSynchronize();
 
     cudaMemcpy(h_D.data(), d_D, numTests * matrixSize * sizeof(float), cudaMemcpyDeviceToHost);
     
-    // output results
     for (int i = 0; i < numTests; i++) {
         results[i].result = floatToUint32(h_D[i * matrixSize]);
     }
@@ -152,7 +148,6 @@ std::vector<TestCase> readInputFile(const std::string& filename) {
             if (!token.empty()) tokens.push_back(token);
         }
 
-        // 2(op, round_mode) + 16(A) + 16(B) + 1(C) = 35
         if (tokens.size() != 35) {
             std::cout << "Warning: Expected 35 tokens, got " << tokens.size() << " in line: " << line << std::endl;
             continue;
@@ -197,41 +192,9 @@ void writeOutputFile(const std::string& filename,
         return;
     }
 
-    file << "Opcode,RoundMode,";
-    
-    for (int i = 0; i < 16; i++) {
-        file << "A" << i << (i < 15 ? "," : "");
-    }
-    file << ",";
-    
-    for (int i = 0; i < 16; i++) {
-        file << "B" << i << (i < 15 ? "," : "");
-    }
-    file << ",ScalarC,wmma_result\n";
-
-    std::map<Opcode, std::string> opcodeToStr;
-    for (const auto& p : opcodeMap) opcodeToStr[p.second] = p.first;
-    std::map<RoundMode, std::string> roundToStr;
-    for (const auto& p : roundModeMap) roundToStr[p.second] = p.first;
-
     for (size_t i = 0; i < testCases.size(); ++i) {
-        const TestCase& tc = testCases[i];
         const Result& res = results[i];
-
-        file << opcodeToStr[tc.opcode] << "," << roundToStr[tc.roundMode] << ",";
-
-        for (int j = 0; j < 16; j++) {
-            file << "0x" << std::hex << std::setw(4) << std::setfill('0') << tc.vectorA[j] << (j < 15 ? "," : "");
-        }
-        file << ",";
-
-        for (int j = 0; j < 16; j++) {
-            file << "0x" << std::hex << std::setw(4) << std::setfill('0') << tc.vectorB[j] << (j < 15 ? "," : "");
-        }
-        file << ",";
-
-        file << "0x" << std::hex << std::setw(8) << std::setfill('0') << tc.scalarC << ","
-             << "0x" << std::hex << std::setw(8) << std::setfill('0') << res.result << "\n";
+        file << "0x" << std::hex << std::setw(8) << std::setfill('0') << res.result << "\n";
     }
 }
 
@@ -251,17 +214,25 @@ void processFile(const std::string& inputFilePath) {
 
     fs::path inputPath(inputFilePath);
     std::string outputFileName = inputPath.stem().string() + "_16x16_wmma_output" + inputPath.extension().string();
-    std::string outputPath = (inputPath.parent_path() / outputFileName).string();
+    fs::path outputDir = "../numeric_fingerprints";
+    
+    if (!fs::exists(outputDir)) {
+        fs::create_directories(outputDir);
+    }
+
+    std::string outputPath = (outputDir / outputFileName).string();
     
     writeOutputFile(outputPath, testCases, results);
     std::cout << "Output written to: " << outputPath << std::endl;
 }
 
 int main() {
-    std::string folderPath = ".";
-    std::cout << "Input folder path (default current directory): ";
-    std::getline(std::cin, folderPath);
-    if (folderPath.empty()) folderPath = ".";
+    std::string folderPath = "../fp16_dp16a";
+    
+    if (!fs::exists(folderPath)) {
+        std::cerr << "Error: Input folder '" << folderPath << "' does not exist." << std::endl;
+        return 1;
+    }
 
     int txtFileCount = 0;
     for (const auto& entry : fs::directory_iterator(folderPath)) {
@@ -276,4 +247,4 @@ int main() {
     return 0;
 }
 
-// 编译命令: nvcc -arch=sm_90 -std=c++17 -o fp16_dp16a_wmma fp16_dp16a_wmma.cu
+// nvcc -arch=sm_90 -std=c++17 -o fp16_dp16a_wmma fp16_dp16a_wmma.cu
