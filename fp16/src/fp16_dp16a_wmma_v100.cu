@@ -15,7 +15,6 @@
 namespace fs = std::filesystem;
 namespace wmma = nvcuda::wmma;
 
-// --- 错误检查宏 ---
 #define CHECK_CUDA(call) { \
     cudaError_t err = call; \
     if (err != cudaSuccess) { \
@@ -31,7 +30,6 @@ namespace wmma = nvcuda::wmma;
         exit(1); \
     } \
 }
-// ----------------
 
 enum Opcode { MPDPA };
 enum RoundMode { RND_ZERO, RND_MINUS_INF, RND_PLUS_INF, RND_NEAREST };
@@ -69,10 +67,8 @@ __global__ void wmmaKernel(const __half* A, const __half* B, const float* C, flo
     int testIdx = blockIdx.x;
     if (testIdx >= numTests) return;
 
-    // V100 (Volta) 需要保证 Warp 行为，但 blockDim.x=32 已满足
     int offset = testIdx * 16 * 16;
     
-    // Volta sm_70 支持 m16n16k16 的 fp16 输入 float 累加
     wmma::fragment<wmma::matrix_a, 16, 16, 16, __half, wmma::row_major> a_frag;
     wmma::fragment<wmma::matrix_b, 16, 16, 16, __half, wmma::row_major> b_frag;
     wmma::fragment<wmma::accumulator, 16, 16, 16, float> c_frag;
@@ -81,20 +77,15 @@ __global__ void wmmaKernel(const __half* A, const __half* B, const float* C, flo
     wmma::load_matrix_sync(a_frag, A + offset, 16);
     wmma::load_matrix_sync(b_frag, B + offset, 16);
     
-    // 初始化 accumulator
     wmma::fill_fragment(c_frag, 0.0f);
     
-    // 将标量 C 加载到 accumulator 中
-    // 注意：WMMA 的 accumulator 是分布式的，直接赋值需要小心，但此处 fill 后循环赋值是常用的 trick
     float c_val = C[testIdx];
     for (int i = 0; i < c_frag.num_elements; i++) {
         c_frag.x[i] = c_val;
     }
     
-    // D = A * B + C
     wmma::mma_sync(d_frag, a_frag, b_frag, c_frag);
     
-    // 存储结果
     wmma::store_matrix_sync(D + offset, d_frag, 16, wmma::mem_row_major);
 }
 
@@ -116,12 +107,10 @@ void executeWMMA(const TestCase* testCases, Result* results, int numTests) {
     for (int i = 0; i < numTests; i++) {
         int offset = i * matrixSize;
         
-        // 构造矩阵 A：只有第一行有数据 (Row Major: A[0][j])
         for (int j = 0; j < 16; j++) {
             h_A[offset + 0 * 16 + j] = __ushort_as_half(testCases[i].vectorA[j]);
         }
         
-        // 构造矩阵 B：只有第一列有数据 (Row Major: B[j][0])
         for (int j = 0; j < 16; j++) {
             h_B[offset + j * 16 + 0] = __ushort_as_half(testCases[i].vectorB[j]);
         }
@@ -133,15 +122,13 @@ void executeWMMA(const TestCase* testCases, Result* results, int numTests) {
     CHECK_CUDA(cudaMemcpy(d_B, h_B.data(), h_B.size() * sizeof(__half), cudaMemcpyHostToDevice));
     CHECK_CUDA(cudaMemcpy(d_C, h_C.data(), h_C.size() * sizeof(float), cudaMemcpyHostToDevice));
 
-    // 启动 Kernel
     wmmaKernel<<<numTests, 32>>>(d_A, d_B, d_C, d_D, numTests);
-    CHECK_LAST_CUDA_ERROR(); // 检查启动错误
+    CHECK_LAST_CUDA_ERROR();
 
-    CHECK_CUDA(cudaDeviceSynchronize()); // 检查执行错误
+    CHECK_CUDA(cudaDeviceSynchronize());
 
     CHECK_CUDA(cudaMemcpy(h_D.data(), d_D, numTests * matrixSize * sizeof(float), cudaMemcpyDeviceToHost));
     
-    // 提取结果 D[0][0]
     for (int i = 0; i < numTests; i++) {
         results[i].result = floatToUint32(h_D[i * matrixSize]);
     }
