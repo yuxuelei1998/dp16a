@@ -213,7 +213,7 @@ void processFile(const std::string& inputFilePath) {
     std::cout << "Finished execution." << std::endl;
 
     fs::path inputPath(inputFilePath);
-    std::string outputFileName = inputPath.stem().string() + "_bf16_16x16_wmma_output" + inputPath.extension().string();
+    std::string outputFileName = inputPath.stem().string() + "_16x16_wmma_output" + inputPath.extension().string();
     
     fs::path outputDir = "../numeric_fingerprints";
     
