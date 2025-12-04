@@ -56,7 +56,7 @@ void printSeparator() {
               << "+" << std::string(WIDTH_RESULT + 2, '-') << "+" << std::endl;
 }
 
-int main() {
+int main(int argc, char* argv[]) {
     std::string targetDir = "../numeric_fingerprints";
     std::string targetFile = "fp16_dp16a_16x16_wmma_output.txt";
     fs::path targetPath = fs::path(targetDir) / targetFile;
@@ -125,28 +125,6 @@ int main() {
 
     std::stringstream structSS;
     structSS << "RM: " << roundingMode.substr(0, std::min((size_t)15, roundingMode.length()))
-             << ((roundingMode.length() > 15) ? "..." : "")
-             << " | Acc: " << (hasOrder ? "Ordered" : "No Order")
-             << " | DP Width: " << dpWidth
-             << " | Extra Bits: " << precBits;
-    std::string internalStructure = structSS.str();
-
-    std::string matchResult = "No exact match found.";
-    if (fs::exists(targetDir)) {
-        for (const auto& entry : fs::directory_iterator(targetDir)) {
-            if (entry.path().filename() == targetFile) continue;
-            std::vector<uint32_t> other = readFingerprint(entry.path().string());
-            if (other == data) {
-                matchResult = "Matches Hardware: " + entry.path().stem().string();
-                break;
-            }
-        }
-    }
-
-    int totalWidth = WIDTH_TYPE + WIDTH_RESULT + 5;
-    std::string title = " NUMERIC PROBE ANALYSIS REPORT ";
-    int padding = (totalWidth - title.length()) / 2;
-
     std::cout << std::endl;
     std::cout << std::string(totalWidth, '=') << std::endl;
     std::cout << std::string(padding, ' ') << title << std::endl;

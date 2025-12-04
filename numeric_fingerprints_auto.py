@@ -26,13 +26,22 @@ def print_error(msg):
 
 def get_gpu_architecture(gpu_name):
     name = gpu_name.upper()
-    if "H100" in name or "HOPPER" in name: return "sm_90"
-    if "L40" in name or "4090" in name or "4080" in name or "ADA" in name: return "sm_89"
-    if "A100" in name: return "sm_80"
-    if "3090" in name or "3080" in name or "A10" in name or "A30" in name: return "sm_86"
-    if "T4" in name or "2080" in name or "TITAN RTX" in name: return "sm_75"
-    if "V100" in name or "TITAN V" in name: return "sm_70"
+    if "RTX 50" in name or "BLACKWELL" in name or "B100" in name or "B200" in name:
+        return "sm_120"
+    if "H100" in name or "H800" in name or "HOPPER" in name:
+        return "sm_90"
+    if "RTX 40" in name or "L40" in name or "ADA" in name:
+        return "sm_89"
+    if "RTX 30" in name or "A10" in name or "A40" in name or "A30" in name or "A16" in name:
+        return "sm_86"
+    if "A100" in name or "A800" in name:
+        return "sm_80"
+    if "RTX 20" in name or "TITAN RTX" in name or "T4" in name or "QUADRO RTX" in name:
+        return "sm_75"
+    if "V100" in name or "TITAN V" in name:
+        return "sm_70"
     if "P100" in name: return "sm_60"
+    if "GTX 10" in name: return "sm_61"
     return None
 
 def detect_gpus():
@@ -86,6 +95,8 @@ def run_project():
             arch_flag = input("Please enter -arch flag (e.g., sm_90): ").strip()
 
     print_success(f"Target Hardware: {selected_gpu} | Arch: {arch_flag}")
+
+    safe_gpu_name = selected_gpu.replace(" ", "_").replace("/", "-").replace(":", "").replace("\\", "")
 
     print_step("Select Precision")
     print("  [1] fp16")
@@ -176,13 +187,13 @@ def run_project():
         sys.exit(1)
 
     print(f"\n{Colors.BOLD}--- Step B: Analyzing Report (C++) ---{Colors.ENDC}")
-    run_cpp_cmd = [f".{os.sep}{cpp_exe_name}"]
+    run_cpp_cmd = [f".{os.sep}{cpp_exe_name}", safe_gpu_name]
     try:
         subprocess.run(run_cpp_cmd, check=True)
     except subprocess.CalledProcessError:
         print_error("Execution of Probe Analysis failed.")
         sys.exit(1)
-    
+
     print_step("Automation Complete.")
 
 if __name__ == "__main__":
