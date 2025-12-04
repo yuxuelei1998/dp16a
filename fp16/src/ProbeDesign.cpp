@@ -125,6 +125,49 @@ int main(int argc, char* argv[]) {
 
     std::stringstream structSS;
     structSS << "RM: " << roundingMode.substr(0, std::min((size_t)15, roundingMode.length()))
+             << ((roundingMode.length() > 15) ? "..." : "")
+             << " | Acc: " << (hasOrder ? "Ordered" : "No Order")
+             << " | DP Width: " << dpWidth
+             << " | Extra Bits: " << precBits;
+    std::string internalStructure = structSS.str();
+
+    std::string matchResult = "No exact match found.";
+    bool matchFound = false;
+    if (fs::exists(targetDir)) {
+        for (const auto& entry : fs::directory_iterator(targetDir)) {
+            if (entry.path().filename() == targetFile) continue;
+            std::vector<uint32_t> other = readFingerprint(entry.path().string());
+            if (other == data) {
+                matchResult = "Matches Hardware: " + entry.path().stem().string();
+                matchFound = true;
+                break;
+            }
+        }
+    }
+
+    if (!matchFound) {
+        std::string hardwareName = "Unknown_Hardware";
+        if (argc > 1) {
+            hardwareName = argv[1];
+        }
+        
+        std::string newFileName = hardwareName + "_TensorCore.txt";
+        fs::path newFilePath = fs::path(targetDir) / newFileName;
+        
+        std::ofstream outFile(newFilePath);
+        if (outFile.is_open()) {
+            for (const auto& val : data) {
+                outFile << "0x" << std::hex << std::setw(8) << std::setfill('0') << val << std::endl;
+            }
+            matchResult = "New fingerprint saved: " + newFileName;
+        } else {
+            std::cerr << "Error: Could not save new fingerprint to " << newFilePath << std::endl;
+        }
+    }
+
+    int totalWidth = WIDTH_TYPE + WIDTH_RESULT + 5;
+    std::string title = " NUMERIC PROBE ANALYSIS REPORT ";
+    int padding = (totalWidth - title.length()) / 2;
     std::cout << std::endl;
     std::cout << std::string(totalWidth, '=') << std::endl;
     std::cout << std::string(padding, ' ') << title << std::endl;
