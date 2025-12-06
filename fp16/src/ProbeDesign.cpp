@@ -82,8 +82,9 @@ int main(int argc, char* argv[]) {
     std::string subnormal = subnormalSupported ? "Supported" : "Not Supported (Flushed to Zero)";
 
     std::string roundingMode = "Unknown";
-    uint32_t r1 = data[54], r2 = data[55];
-    if (r1 == 0x3f800001 && r2 == 0xbf800001) roundingMode = "Truncation (RZ)";
+    uint32_t r1 = data[54], r2 = data[55], r3 = data[88];
+    if (r1 == 0x3f800001 && r2 == 0xbf800001  && r3 == 0x40000000) roundingMode = "Truncation";
+    else if (r1 == 0x3f800001 && r2 == 0xbf800001  && r3 == 0x3FFFFFFF) roundingMode = "Round to Zero (RZ)";
     else if (r1 == 0x3f800001 && r2 == 0xbf800002) roundingMode = "Round to Negative Infinity (RM)";
     else if (r1 == 0x3f800002 && r2 == 0xbf800001) roundingMode = "Round to Positive Infinity (RP)";
     else if (r1 == 0x3f800002 && r2 == 0xbf800002) roundingMode = "Round to Nearest Even (RN)";
